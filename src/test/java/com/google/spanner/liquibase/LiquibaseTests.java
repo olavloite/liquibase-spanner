@@ -22,14 +22,11 @@ import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.exception.DatabaseException;
 import liquibase.exception.LiquibaseException;
-import liquibase.ext.spanner.CloudSpanner;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.slf4j.Logger;
@@ -37,7 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.Duration;
 import java.util.*;
 
 // As these are forms of integration tests -- against an external emulator or a real Spanner instance --
@@ -152,21 +148,25 @@ public class LiquibaseTests {
 
     @Test
     void doEmulatorSpannerCreateAndRollbackTest() throws SQLException, LiquibaseException {
-        doLiquibaseCreateAndRollbackTest(getSpannerEmulator());
+        doLiquibaseCreateAndRollbackTest( "create_table.spanner.sql", getSpannerEmulator());
+        doLiquibaseCreateAndRollbackTest( "create_table.spanner.yaml", getSpannerEmulator());
     }
 
     @Test
     @Tag("integration")
     void doRealSpannerCreateAndRollbackTest() throws SQLException, LiquibaseException {
-        doLiquibaseCreateAndRollbackTest(getSpannerReal());
+        doLiquibaseCreateAndRollbackTest( "create_table.spanner.sql", getSpannerReal());
+        doLiquibaseCreateAndRollbackTest( "create_table.spanner.yaml", getSpannerReal());
     }
 
-    void doLiquibaseCreateAndRollbackTest(TestHarness.Connection testHarness) throws SQLException, LiquibaseException {
+    void doLiquibaseCreateAndRollbackTest(String changeLogFile,
+                                          TestHarness.Connection testHarness)
+            throws SQLException, LiquibaseException {
 
         List<Map<String,Object>> rows = tableColumns(testHarness.getJDBCConnection(), "rollback_table");
         Assert.assertTrue(rows.size() == 0);
 
-        Liquibase liquibase = getLiquibase(testHarness, "create_table.spanner.sql");
+        Liquibase liquibase = getLiquibase(testHarness, changeLogFile);
         liquibase.update(null, new LabelExpression("rollback_stuff"));
         liquibase.tag("tag-at-rollback");
 

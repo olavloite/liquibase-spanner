@@ -234,7 +234,7 @@ public class TestHarness {
         // JDBC connection initialize
         java.sql.Connection conn = DriverManager.getConnection(
                 String.format(
-                    "jdbc:cloudspanner:/projects/%s/instances/%s/databases/%s?autocommit=true",
+                    "jdbc:cloudspanner:/projects/%s/instances/%s/databases/%s?autocommit=false",
                     projectId, instanceId, databaseId));
 
         return new Connection() {
