@@ -12,69 +12,62 @@ import liquibase.statement.core.CreateTableStatement;
 import liquibase.structure.core.Schema;
 import liquibase.structure.core.Table;
 import liquibase.util.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 
 public class SpannerCreateTableGenerator extends CreateTableGenerator {
 
-    final Logger log = LoggerFactory.getLogger(SpannerCreateTableGenerator.class);
-
     public SpannerCreateTableGenerator() {
-        log.info("Starting create table generator");
     }
 
+    //
+    // Reference
+    // https://cloud.google.com/spanner/docs/data-definition-language#ddl_syntax
+    //
     @Override
     public Sql[] generateSql(CreateTableStatement statement, Database database, SqlGeneratorChain sqlGeneratorChain) {
-        log.info("Generating sql");
 
-        List<Sql> additionalSql = new ArrayList<>();
-
+        // TODO: no CatalogName supported. No SchemaName supported.
         StringBuilder buffer = new StringBuilder();
         buffer.append("CREATE TABLE ").append(database.escapeTableName(statement.getCatalogName(),
                 statement.getSchemaName(), statement.getTableName())).append(" ");
         buffer.append("(");
 
-        boolean isSinglePrimaryKeyColumn = (statement.getPrimaryKeyConstraint() != null) && (statement
-                .getPrimaryKeyConstraint().getColumns().size() == 1);
-
-        boolean isPrimaryKeyAutoIncrement = false;
-
-        /* We have reached the point after "CREATE TABLE ... (" and will now iterate through the column list. */
-        Iterator<String> columnIterator = statement.getColumns().iterator();
+        // We have reached the point after "CREATE TABLE ... (" and will now iterate through the column list.
+        final Iterator<String> columnIterator = statement.getColumns().iterator();
         while (columnIterator.hasNext()) {
-            String column = columnIterator.next();
+            final String column = columnIterator.next();
 
             // Column name
-            buffer.append(database.escapeColumnName(statement.getCatalogName(), statement.getSchemaName(), statement.getTableName(), column));
+            final String columnName = database.escapeColumnName(
+                    statement.getCatalogName(), statement.getSchemaName(),
+                    statement.getTableName(), column);
+            buffer.append(columnName);
 
             // Column type
-            DatabaseDataType columnType = statement.getColumnTypes().get(column).toDatabaseDataType(database);
+            final DatabaseDataType columnType = statement.getColumnTypes().get(column).toDatabaseDataType(database);
             buffer.append(" ").append(columnType);
 
-            // TODO: This is an error. No auto incremental constraints.
-            AutoIncrementConstraint autoIncrementConstraint = null;
-            for (AutoIncrementConstraint currentAutoIncrementConstraint : statement.getAutoIncrementConstraints()) {
-                if (column.equals(currentAutoIncrementConstraint.getColumnName())) {
-                    autoIncrementConstraint = currentAutoIncrementConstraint;
-                    break;
-                }
-            }
-
             // NOT NULL if applicable
-            if (statement.getNotNullColumns().get(column) != null) {
+            if (statement.getNotNullColumns().containsKey(column)) {
                 buffer.append(" NOT NULL");
             }
 
-            // TODO: Add in allow_commit_timestamp option.
+            // Auto commit timestamp is the (rough) equivalent of auto increment
+            for (AutoIncrementConstraint iter : statement.getAutoIncrementConstraints()) {
+                if (!iter.getColumnName().equals(column)) {
+                    continue;
+                }
+                buffer.append(" OPTIONS ( allow_commit_timestamp = true )");
+            }
+
+            // Comma for next column (if any)
             if (columnIterator.hasNext()) {
                 buffer.append(", ");
             }
         }
 
+        // End of columns
         buffer.append(")");
 
         Iterator<ForeignKeyConstraint> fkConstraintIter = statement.getForeignKeyConstraints().iterator();
@@ -106,12 +99,6 @@ public class SpannerCreateTableGenerator extends CreateTableGenerator {
             }
         }
 
-        /*
-         * Here, the list of columns and constraints in the form
-         * ( column1, ..., columnN, constraint1, ..., constraintN,
-         * ends. We cannot leave an expression like ", )", so we remove the last comma.
-         */
-
         // Primary key
         if ((statement.getPrimaryKeyConstraint() != null) && !statement.getPrimaryKeyConstraint().getColumns()
                 .isEmpty()) {
@@ -119,12 +106,9 @@ public class SpannerCreateTableGenerator extends CreateTableGenerator {
             buffer.append(database.escapeColumnNameList(StringUtils.join(statement.getPrimaryKeyConstraint().getColumns(), ", ")));
             buffer.append(")");
         }
-        //String sql = buffer.toString().replaceFirst(",\\s*$", "") + ")";
 
-
-        additionalSql.add(0, new UnparsedSql(buffer.toString(), getAffectedTable(statement)));
-
-        return additionalSql.toArray(new Sql[additionalSql.size()]);
+        // Return create statement
+        return new Sql[]{ new UnparsedSql(buffer.toString(), getAffectedTable(statement)) };
     }
 
     @Override

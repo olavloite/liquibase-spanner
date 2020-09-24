@@ -16,6 +16,7 @@
 
 plugins {
     id "java"
+    id "jacoco"
     id "com.google.cloud.tools.jib" version "2.4.0"
     id "com.github.johnrengelman.shadow" version "6.0.0"
 }
@@ -68,10 +69,22 @@ test {
   useJUnitPlatform {
     excludeTags "integration"
   }
+  finalizedBy jacocoTestReport
 }
 
+// Produce JacocoTestReport
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.60
+            }
+        }
+    }
+}
+check.dependsOn jacocoTestCoverageVerification
 
-// Run integration tests (against live Spanner)
+// Run integration tests (same tests against live Spanner)
 //
 // Requires SPANNER_PROJECT and SPANNER_INSTANCE environment variables.
 // Also requires GOOGLE_APPLICATION_CREDENTIALS environment variable
